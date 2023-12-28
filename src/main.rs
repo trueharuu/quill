@@ -4,7 +4,8 @@
     clippy::suspicious,
     clippy::nursery,
     clippy::complexity,
-    clippy::pedantic
+    clippy::pedantic,
+    clippy::large_stack_frames
 )]
 #![allow(
     clippy::too_many_lines,
@@ -16,7 +17,7 @@
     clippy::let_with_type_underscore
 )]
 
-use std::{mem::ManuallyDrop, time::Instant};
+use std::time::Instant;
 
 use ariadne::{sources, Label, Report};
 use chumsky::Parser;
@@ -34,7 +35,16 @@ pub mod parse;
 pub mod spans;
 
 fn main() {
-    let args = ManuallyDrop::new(std::env::args().collect::<Vec<_>>());
+    std::thread::Builder::new()
+        .stack_size(1024 * 1024)
+        .spawn(main2)
+        .unwrap()
+        .join()
+        .unwrap();
+    println!("!");
+}
+fn main2() {
+    let args = std::env::args().collect::<Vec<_>>();
     let options = &args[1];
     assert!(options.starts_with('-'));
     // dbg!(std::fs::canonicalize(args[2].strip_prefix("-f=").unwrap()));
