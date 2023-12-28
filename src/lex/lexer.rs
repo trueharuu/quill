@@ -6,8 +6,8 @@ use crate::spans::span::{Span, Spanned};
 
 use super::token::Token;
 
-pub fn lexer<'s>(
-) -> impl Parser<'s, &'s str, Vec<Spanned<Token<'s>>>, extra::Err<Rich<'s, char, Span>>> {
+pub fn lexer<'s>() -> impl Parser<'s, &'s str, Vec<Spanned<Token>>, extra::Err<Rich<'s, char, Span>>>
+{
     let eof = end().to(Token::Eof);
     let natural = text::int(10)
         .to_slice()
@@ -23,33 +23,34 @@ pub fn lexer<'s>(
         .map(Token::Real)
         .boxed();
     let bool = choice((just("true").to(Token::True), just("false").to(Token::False))).boxed();
-    let label = text::ident().map(Token::Label);
+    let label = text::ident().map(|x: &str| Token::Label(x.to_string()));
 
     let sym_syntax = choice((
         just("+").or(just("\\plus")).to(Token::Plus),
+        just("->").to(Token::Arrow),
         just("-").or(just("\\minus")).to(Token::Minus),
         just("*").or(just("\\asterisk")).to(Token::Asterisk),
         just("/").or(just("\\slash")).to(Token::Slash),
         just("%").or(just("\\percent")).to(Token::Percent),
         // just("\\").to(Token::Backslash),
+        just("==").to(Token::Identical),
         just("=").or(just("\\eq")).to(Token::Eq),
         just("!=").to(Token::Ne),
         just("≠").or(just("\\ne")).to(Token::Ne),
-        just(">").to(Token::Gt),
         just(">=").to(Token::Ge),
+        just(">").to(Token::Gt),
         just("≥").or(just("\\ge")).to(Token::Ge),
-        just("<").to(Token::Lt),
         just("<=").to(Token::Le),
+        just("<").to(Token::Lt),
         just("≤").or(just("\\le")).to(Token::Le),
         just("≡").or(just("\\identical")).to(Token::Identical),
-        just("==").to(Token::Identical),
         just(":=").or(just("\\defined")).to(Token::Defined),
         just("::").to(Token::DoubleColon),
+        just(";").to(Token::Semicolon),
     ));
     let sym_other = choice((
         just("'").to(Token::Apostrophe),
         just(":").to(Token::Colon),
-        just("->").to(Token::Arrow),
         just("→").or(just("\\arrow")).to(Token::Arrow),
     ));
     let sym_grouping = choice((
@@ -67,6 +68,8 @@ pub fn lexer<'s>(
         just("∅").or(just("\\emptyset")).to(Token::EmptySet),
         just("∈").or(just("\\in")).to(Token::In),
         just("∉").or(just("\\notin")).to(Token::NotIn),
+        just("∋").or(just("\\contains")).to(Token::Contains),
+        just("∌ ").or(just("\\notcontains")).to(Token::NotContains),
         just("∀").or(just("\\forall")).to(Token::ForAll),
         just("∃").or(just("\\exists")).to(Token::Exists),
         just("∄").or(just("\\notexists")).to(Token::NotExists),
@@ -78,15 +81,15 @@ pub fn lexer<'s>(
         just("⊅").or(just("\\supersetne")).to(Token::SupersetNe),
     ));
     let sym_logic = choice((
-        just("∧").or(just("\\and")).to(Token::And),
-        just("∨").or(just("\\or")).to(Token::Or),
+        just("∧").or(just("\\and")).or(just("&&")).to(Token::And),
+        just("∨").or(just("\\or")).or(just("||")).to(Token::Or),
         just("&").to(Token::Ampersand),
         just("|").to(Token::Pipe),
-        just("⊻").or(just("\\xor")).to(Token::Xor),
+        just("⊻").or(just("\\xor")).or(just("^^")).to(Token::Xor),
         just("^").to(Token::Caret),
-        just("⊼").or(just("\\nand")).to(Token::Nand),
-        just("⊽").or(just("\\nor")).to(Token::Nor),
-        just("¬").or(just("~")).to(Token::Not),
+        just("⊼").or(just("\\nand")).or(just("~&")).to(Token::Nand),
+        just("⊽").or(just("\\nor")).or(just("~|")).to(Token::Nor),
+        just("¬").or(just("~")).or(just("\\not")).to(Token::Not),
     ));
     let sym_math = choice((
         just("×").or(just("\\cross")).to(Token::Cross),

@@ -12,3 +12,4 @@ chumsky = { version = "1.0.0-alpha.6", features = [
     "spill-stack",
     "label",
 ] }
+yansi = "0.5.1"

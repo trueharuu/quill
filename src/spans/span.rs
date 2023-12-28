@@ -55,7 +55,7 @@ pub trait ApplySpan {
 
 impl<T> ApplySpan for T {}
 
-pub fn span<'a, 'b, T, I, E>(t: T, s: &mut MapExtra<'a, 'b, I, E>) -> Spanned<T>
+pub fn span<'a, 'b, T, I, E>(t: T, s: &MapExtra<'a, 'b, I, E>) -> Spanned<T>
 where
     I: chumsky::input::Input<'a, Span = chumsky::span::SimpleSpan>,
     E: chumsky::extra::ParserExtra<'a, I>,

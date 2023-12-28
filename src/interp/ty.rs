@@ -1,13 +1,14 @@
 use std::fmt::Display;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Ty {
     Natural,
     Integer,
     Real,
     Bool,
     Set(Box<Ty>),
-    Range(Box<Ty>),
+    Tuple(Vec<Ty>),
+    Fn(String),
     None,
     Unresolved,
 }
@@ -34,9 +35,16 @@ impl Display for Ty {
                 Self::Natural => "Natural".to_string(),
                 Self::Real => "Real".to_string(),
                 Self::None => "<none>".to_string(),
-                Self::Range(l) => format!("Range({l})"),
-                Self::Set(l) => format!("Set({l})"),
+                Self::Tuple(t) => format!(
+                    "Tuple({})",
+                    t.iter()
+                        .map(|x| format!("{x}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                Self::Set(t) => format!("Set({t})"),
                 Self::Unresolved => "<unresolved>".to_string(),
+                Self::Fn(t) => format!("Fn({t})"),
             }
         )
     }

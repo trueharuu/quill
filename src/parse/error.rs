@@ -1,14 +1,14 @@
 use ariadne::{Color, Fmt};
 use chumsky::error::Error;
 
-use crate::{lex::token::Token, spans::span::Span};
+use crate::{lex::token::Token, spans::span::{Span, Spanned}};
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum ParserError<'t> {
-    ExpectedFound(Span, Vec<Option<Token<'t>>>, Option<Token<'t>>),
+pub enum ParserError {
+    ExpectedFound(Span, Vec<Option<Spanned<Token>>>, Option<Spanned<Token>>),
 }
 
-impl<'t> ParserError<'t> {
+impl ParserError {
     #[must_use]
     pub const fn span(&self) -> Span {
         match self {
@@ -26,44 +26,44 @@ impl<'t> ParserError<'t> {
                 } else {
                     e.iter()
                         .map(|x| {
-                            x.map_or_else(|| String::from("end of input"), |x| format!("{x:?}"))
+                            x.as_ref().map_or_else(|| String::from("end of input"), |x| format!("{x:?}"))
                                 .fg(Color::Red)
                                 .to_string()
                         })
                         .collect::<Vec<_>>()
                         .join(", ")
                 }),
-                f.map_or_else(|| String::from("end of input"), |x| format!("{x:?}"))
+                f.as_ref().map_or_else(|| String::from("end of input"), |x| format!("{x:?}"))
                     .fg(Color::Green)
             ),
         }
     }
 }
 
-impl<'a, 't> Error<'a, &'a [Token<'t>]> for ParserError<'t> {
+impl<'a> Error<'a, &'a [Spanned<Token>]> for ParserError {
     fn expected_found<
         E: IntoIterator<
             Item = Option<
                 chumsky::util::MaybeRef<
                     'a,
-                    <&'a [Token<'t>] as chumsky::prelude::Input<'a>>::Token,
+                    <&'a [Spanned<Token>] as chumsky::prelude::Input<'a>>::Token,
                 >,
             >,
         >,
     >(
         expected: E,
         found: Option<
-            chumsky::util::MaybeRef<'a, <&'a [Token<'t>] as chumsky::prelude::Input<'a>>::Token>,
+            chumsky::util::MaybeRef<'a, <&'a [Spanned<Token>] as chumsky::prelude::Input<'a>>::Token>,
         >,
-        span: <&'a [Token<'t>] as chumsky::prelude::Input<'a>>::Span,
+        span: <&'a [Spanned<Token>] as chumsky::prelude::Input<'a>>::Span,
     ) -> Self {
         Self::ExpectedFound(
             span,
             expected
                 .into_iter()
-                .map(|e| e.as_deref().copied())
+                .map(|e| e.as_deref().cloned())
                 .collect(),
-            found.as_deref().copied(),
+            found.as_deref().cloned(),
         )
     }
 }

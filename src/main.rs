@@ -9,14 +9,23 @@
 #![allow(
     clippy::too_many_lines,
     clippy::module_name_repetitions,
-    clippy::similar_names
+    clippy::similar_names,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::missing_safety_doc,
+    clippy::let_with_type_underscore
 )]
 
-use ariadne::{sources, Config, Label, Report};
+use std::{mem::ManuallyDrop, time::Instant};
+
+use ariadne::{sources, Label, Report};
 use chumsky::Parser;
 use lex::lexer::lexer;
+use yansi::Color;
 
-use crate::{parse::parser::parser, spans::span::Spanned};
+use crate::{
+    common::etc::Painted, lex::escapes::escape, parse::parser::parser, spans::span::Spanned,
+};
 pub mod common;
 // pub mod error;
 pub mod interp;
@@ -25,13 +34,49 @@ pub mod parse;
 pub mod spans;
 
 fn main() {
-    let args = std::env::args().collect::<Vec<_>>();
+    let args = ManuallyDrop::new(std::env::args().collect::<Vec<_>>());
     let options = &args[1];
     assert!(options.starts_with('-'));
-    let input = &args[2];
+    // dbg!(std::fs::canonicalize(args[2].strip_prefix("-f=").unwrap()));
+    let mut input = args[2]
+        .clone()
+        .strip_prefix("-f=")
+        .map_or_else(|| args[2].clone(), |x| std::fs::read_to_string(x).unwrap());
+    let id = "test.q";
+
+    // println!("\n{}", "Input:".painted().fg(yansi::Color::Green).bold());
+
+    // remove escapes from source input.
+    if options.contains('e') | options.contains('E') {
+        let start = Instant::now();
+        let output = escape(&input);
+
+        println!("{output}");
+        if options.contains('b') {
+            println!(
+                "{} {:?}",
+                "[bench::fmt]".painted().fg(Color::Magenta),
+                start.elapsed()
+            );
+        }
+        if options.contains('E') {
+            if let Some(t) = args[2].strip_prefix("-f=") {
+                std::fs::write(t, output.clone()).unwrap();
+            }
+            input = output;
+        }
+    }
 
     if options.contains('l') || options.contains('L') {
-        let lexed = lexer().parse(input).into_output_errors();
+        let start = Instant::now();
+        let lexed = lexer().parse(&input).into_output_errors();
+        if options.contains('b') {
+            println!(
+                "{} {:?}",
+                "[bench::lexer]".painted().fg(Color::Magenta),
+                start.elapsed()
+            );
+        }
 
         lexed
             .1
@@ -41,17 +86,17 @@ fn main() {
             .for_each(|x| {
                 Report::build(
                     ariadne::ReportKind::Custom("lexing error", ariadne::Color::Cyan),
-                    "test.q",
+                    id,
                     x.span().start,
                 )
                 .with_message(x.to_string())
                 .with_label(
-                    Label::new(("test.q", x.span().into_range()))
+                    Label::new((id, x.span().into_range()))
                         .with_message(x.reason().to_string())
-                        .with_color(ariadne::Color::Red),
+                        .with_color(ariadne::Color::Cyan),
                 )
                 .finish()
-                .eprint(sources([("test.q", input)]))
+                .eprint(sources([(id, &input)]))
                 .unwrap();
             });
 
@@ -61,9 +106,9 @@ fn main() {
                     "{}",
                     tokens
                         .iter()
-                        .map(|Spanned(x, _)| format!("{x:?}"))
+                        .map(|x| format!("{x:#?}"))
                         .collect::<Vec<_>>()
-                        .join(" ")
+                        .join("\n")
                 );
                 println!(
                     "{}",
@@ -76,28 +121,36 @@ fn main() {
             }
 
             if options.contains('p') || options.contains('P') {
-                let collect = tokens.iter().map(|x| x.0).collect::<Vec<_>>();
+                let collect = tokens.clone().into_iter().collect::<Vec<_>>();
+                let start = Instant::now();
                 let parsed = parser().parse(&collect).into_output_errors();
+                if options.contains('b') {
+                    println!(
+                        "{} {:?}",
+                        "[bench::parser]".painted().fg(Color::Magenta),
+                        start.elapsed()
+                    );
+                }
 
                 parsed.1.clone().into_iter().for_each(|x| {
                     Report::build(
                         ariadne::ReportKind::Custom("parsing error", ariadne::Color::Magenta),
-                        "test.q",
+                        id,
                         tokens.get(x.span().start).map_or(0, |x| x.1.start),
                     )
                     .with_message(x.diagnostic())
                     .with_label(
                         Label::new((
-                            "test.q",
+                            id,
                             tokens.get(x.span().start).map_or(0, |x| x.1.start)
                                 ..tokens.get(x.span().end - 1).map_or(0, |x| x.1.end),
                         ))
                         .with_message(x.diagnostic())
                         .with_color(ariadne::Color::Magenta),
                     )
-                    .with_config(Config::default().with_compact(true))
+                    // .with_config(Config::default().with_compact(true))
                     .finish()
-                    .eprint(sources([("test.q", input)]))
+                    .eprint(sources([(id, &input)]))
                     .unwrap();
                 });
 
@@ -114,32 +167,30 @@ fn main() {
                     }
 
                     if options.contains('i') {
-                        if let Err(x) = interp::interpreter::many(&p) {
+                        let start = Instant::now();
+                        let out = interp::interpreter::many(&p);
+                        if options.contains('b') {
+                            println!(
+                                "{} {:?}",
+                                "[bench::interpreter]".painted().fg(Color::Magenta),
+                                start.elapsed()
+                            );
+                        }
+                        if let Err(x) = out {
+                            // dbg!(&x);
                             let mut r = Report::build(
                                 ariadne::ReportKind::Custom(
                                     "interpreter error",
                                     ariadne::Color::Red,
                                 ),
-                                "test.q",
+                                id,
                                 tokens.get(x.span().start).map_or(0, |x| x.1.start),
-                            )
-                            .with_message(x.diagnostic())
-                            .with_label(
-                                Label::new((
-                                    "test.q",
-                                    tokens.get(x.span().start).map_or(0, |x| x.1.start)
-                                        ..tokens.get(x.span().end - 1).map_or(0, |x| x.1.end),
-                                ))
-                                .with_message(x.diagnostic())
-                                .with_color(ariadne::Color::Magenta),
                             );
 
-                            if let Some(s) = x.note() {
-                                r.set_note(s);
-                            }
+                            x.diagnostic(id, &mut r);
 
                             // .with_config(Config::default().with_compact(true))
-                            r.finish().eprint(sources([("test.q", input)])).unwrap();
+                            r.finish().eprint(sources([(id, &input)])).unwrap();
                         };
                     }
                 }

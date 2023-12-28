@@ -1,21 +1,22 @@
 use std::fmt::{Debug, Display};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Token<'src> {
+#[derive(Clone, Debug, PartialEq)]
+pub enum Token {
     Eof,
     Natural(usize),
     Real(f64),
-    Label(&'src str),
+    Label(String),
 
     True,  // true
     False, // false
 
     // symbols, syntax
-    Plus,     // +
-    Minus,    // -
-    Asterisk, // *
-    Slash,    // /
-    Percent,  // %
+    Plus,      // +
+    Minus,     // -
+    Asterisk,  // *
+    Slash,     // /
+    Percent,   // %
+    Semicolon, // ;
     // Backslash, // \
     Eq,          // =
     Ne,          // !=, ≠
@@ -47,6 +48,8 @@ pub enum Token<'src> {
     EmptySet,     // ∅
     In,           // ∈
     NotIn,        // ∉
+    Contains,     // ∋
+    NotContains,  // ∌
     ForAll,       // ∀
     Exists,       // ∃
     NotExists,    // ∄
@@ -74,7 +77,7 @@ pub enum Token<'src> {
     Infinity,   // ∞
 }
 
-impl<'s> Display for Token<'s> {
+impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -86,6 +89,7 @@ impl<'s> Display for Token<'s> {
                 Self::True => "true".to_string(),
                 Self::False => "false".to_string(),
                 Self::Label(l) => (*l).to_string(),
+                Self::Semicolon => ";".to_string(),
 
                 // symbols, syntax
                 Self::Plus => "+".to_string(),
@@ -127,6 +131,8 @@ impl<'s> Display for Token<'s> {
                 Self::NotExists => "∄".to_string(),
                 Self::In => "∈".to_string(),
                 Self::NotIn => "∉".to_string(),
+                Self::Contains => "∋".to_string(),
+                Self::NotContains => "∌".to_string(),
 
                 Self::Subset => "⊂".to_string(),
                 Self::SubsetEq => "⊆".to_string(),
