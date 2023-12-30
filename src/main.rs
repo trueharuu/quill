@@ -14,7 +14,8 @@
     clippy::missing_errors_doc,
     clippy::missing_panics_doc,
     clippy::missing_safety_doc,
-    clippy::let_with_type_underscore
+    clippy::let_with_type_underscore,
+    clippy::cast_precision_loss
 )]
 
 use std::time::Instant;
@@ -25,7 +26,8 @@ use lex::lexer::lexer;
 use yansi::Color;
 
 use crate::{
-    common::etc::Painted, lex::escapes::escape, parse::parser::parser, spans::span::Spanned,
+    common::etc::Painted, interp::env::Env, lex::escapes::escape, parse::parser::parser,
+    spans::span::Spanned,
 };
 pub mod common;
 // pub mod error;
@@ -35,15 +37,6 @@ pub mod parse;
 pub mod spans;
 
 fn main() {
-    std::thread::Builder::new()
-        .stack_size(1024 * 1024)
-        .spawn(main2)
-        .unwrap()
-        .join()
-        .unwrap();
-    println!("!");
-}
-fn main2() {
     let args = std::env::args().collect::<Vec<_>>();
     let options = &args[1];
     assert!(options.starts_with('-'));
@@ -60,6 +53,7 @@ fn main2() {
     if options.contains('e') | options.contains('E') {
         let start = Instant::now();
         let output = escape(&input);
+        println!("{}", "Input:".painted().fg(Color::Green).bold());
 
         println!("{output}");
         if options.contains('b') {
@@ -177,8 +171,12 @@ fn main2() {
                     }
 
                     if options.contains('i') {
+                        if options.contains('e') | options.contains('E') {
+                            println!("{}", "Output:".painted().fg(Color::Blue).bold());
+                        }
                         let start = Instant::now();
-                        let out = interp::interpreter::many(&p);
+                        let env = rc!(Env::new());
+                        let out = interp::interpreter::many(&p, &env);
                         if options.contains('b') {
                             println!(
                                 "{} {:?}",

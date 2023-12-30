@@ -19,3 +19,10 @@ macro_rules! rc {
         ::std::rc::Rc::new(::std::cell::RefCell::new(Value::None))
     };
 }
+
+#[macro_export]
+macro_rules! list {
+    ($t:ty) => {
+        ::std::boxed::Box<[$t]>
+    };
+}

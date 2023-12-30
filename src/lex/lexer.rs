@@ -9,19 +9,19 @@ use super::token::Token;
 pub fn lexer<'s>() -> impl Parser<'s, &'s str, Vec<Spanned<Token>>, extra::Err<Rich<'s, char, Span>>>
 {
     let eof = end().to(Token::Eof);
-    let natural = text::int(10)
-        .to_slice()
-        .from_str()
-        .unwrapped()
-        .map(Token::Natural)
-        .boxed();
     let real = text::int(10)
-        .then(just('.').then(text::digits(10)))
+        .then(just('.').then(text::digits(10)).or_not())
         .to_slice()
         .from_str()
         .unwrapped()
         .map(Token::Real)
         .boxed();
+    let string = group((
+        just('"'),
+        none_of('"').repeated().collect(),
+        just('"'),
+    ))
+    .map(|(_, e, _)| Token::String(e));
     let bool = choice((just("true").to(Token::True), just("false").to(Token::False))).boxed();
     let label = text::ident().map(|x: &str| Token::Label(x.to_string()));
 
@@ -48,6 +48,14 @@ pub fn lexer<'s>() -> impl Parser<'s, &'s str, Vec<Spanned<Token>>, extra::Err<R
         just("::").to(Token::DoubleColon),
         just(";").to(Token::Semicolon),
     ));
+    let sym_kw = choice((
+        just("if").to(Token::If),
+        just("else").to(Token::Else),
+        just("fn").to(Token::Fn),
+        just("return").to(Token::Return),
+        just("throw").to(Token::Throw),
+    ));
+
     let sym_other = choice((
         just("'").to(Token::Apostrophe),
         just(":").to(Token::Colon),
@@ -98,6 +106,7 @@ pub fn lexer<'s>() -> impl Parser<'s, &'s str, Vec<Spanned<Token>>, extra::Err<R
     ));
 
     let sym = choice((
+        sym_kw,
         sym_syntax,
         sym_other,
         sym_grouping,
@@ -106,7 +115,7 @@ pub fn lexer<'s>() -> impl Parser<'s, &'s str, Vec<Spanned<Token>>, extra::Err<R
         sym_math,
     ));
 
-    let token = real.or(natural).or(bool).or(sym).or(label);
+    let token = string.or(real).or(bool).or(sym).or(label);
 
     let comment = just("//")
         .then(any().and_is(just('\n').not()).repeated())

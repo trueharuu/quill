@@ -9,7 +9,7 @@ pub enum Expr {
     Mul(Box<Spanned<Self>>, Spanned<Token>, Box<Spanned<Self>>), // a * b
     CrossProduct(Box<Spanned<Self>>, Spanned<Token>, Box<Spanned<Self>>), // a × b
     DotProduct(Box<Spanned<Self>>, Spanned<Token>, Box<Spanned<Self>>), // a · b
-    Modulus(Box<Spanned<Self>>, Spanned<Token>, Box<Spanned<Self>>), // a % b
+    Rem(Box<Spanned<Self>>, Spanned<Token>, Box<Spanned<Self>>), // a % b
     Div(Box<Spanned<Self>>, Spanned<Token>, Box<Spanned<Self>>), // a / b
     Eq(Box<Spanned<Self>>, Spanned<Token>, Box<Spanned<Self>>),  // a = b
     Ne(Box<Spanned<Self>>, Spanned<Token>, Box<Spanned<Self>>),  // a != b
@@ -19,7 +19,7 @@ pub enum Expr {
     Le(Box<Spanned<Self>>, Spanned<Token>, Box<Spanned<Self>>),  // a ≤ b
     Identical(Box<Spanned<Self>>, Spanned<Token>, Box<Spanned<Self>>), // a ≡ b
     Define(Box<Spanned<Self>>, Spanned<Token>, Box<Spanned<Self>>), // a := b
-    Into(Box<Spanned<Self>>, Spanned<Token>, Box<Spanned<Self>>), // a → b
+    Reassign(Box<Spanned<Self>>, Spanned<Token>, Box<Spanned<Self>>), // a -> b
     Group(Spanned<Token>, Box<Spanned<Self>>, Spanned<Token>),   // (a)
     Tuple(Spanned<Token>, Vec<Spanned<Self>>, Spanned<Token>),   // (a, b, ...)
     Union(Box<Spanned<Self>>, Spanned<Token>, Box<Spanned<Self>>), // a ∪ b
@@ -63,6 +63,28 @@ pub enum Expr {
         Vec<Spanned<Self>>,
         Spanned<Token>,
     ), // a(b, c, d...)
+    Access(Box<Spanned<Self>>, Spanned<Token>, Box<Spanned<Self>>), // a:b
+    If(
+        Spanned<Token>,
+        Spanned<Token>,
+        Box<Spanned<Self>>,
+        Spanned<Token>,
+        Box<Spanned<Self>>,
+        Option<Spanned<Token>>,
+        Option<Box<Spanned<Self>>>,
+    ), // if (cond) { ... } else? { ... }?
+    Block(Spanned<Token>, Vec<Spanned<Self>>, Spanned<Token>),      // { stmt.. }
+    Fn(
+        Spanned<Token>,
+        Box<Spanned<Self>>,
+        Spanned<Token>,
+        Vec<Spanned<Self>>,
+        Spanned<Token>,
+        Box<Spanned<Self>>,
+    ), // fn label(argv...) { ... }
+    Return(Spanned<Token>, Box<Spanned<Self>>), // return expr
+    Throw(Spanned<Token>, Box<Spanned<Self>>), // throw expr
+    
 }
 
 impl Expr {
@@ -79,10 +101,10 @@ impl Expr {
             | Self::Identical(a, o, b)
             | Self::In(a, o, b)
             | Self::Intersection(a, o, b)
-            | Self::Into(a, o, b)
+            | Self::Reassign(a, o, b)
             | Self::Le(a, o, b)
             | Self::Lt(a, o, b)
-            | Self::Modulus(a, o, b)
+            | Self::Rem(a, o, b)
             | Self::Mul(a, o, b)
             | Self::Nand(a, o, b)
             | Self::Ne(a, o, b)
@@ -128,6 +150,32 @@ impl Expr {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            Self::Access(expr, colon, label) => format!("{expr}{colon}{label}"),
+            Self::If(if_token, l_paren, condition, r_paren, block, else_token, else_block) => {
+                format!(
+                    "{if_token} {l_paren}{condition}{r_paren} {block}{}",
+                    if let Some((e, b)) = else_token.as_ref().zip(else_block.as_ref()) {
+                        format!("{e} {b}")
+                    } else {
+                        String::new()
+                    }
+                )
+            }
+            Self::Block(lb, expr, rb) => format!(
+                "{lb}\n{}{rb}",
+                expr.iter()
+                    .map(|x| format!("{x}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
+            Self::Fn(fn_token, label, lp, argv, rp, block) => format!(
+                "{fn_token} {label}{lp}{}{rp} {block}",
+                argv.iter()
+                    .map(|x| format!("{x}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Self::Return(a, b) | Self::Throw(a, b) => format!("{a} {b}"),
         }
     }
 }
@@ -145,7 +193,7 @@ impl Named for Expr {
             Self::Mul(..) => String::from("Mul"),
             Self::CrossProduct(..) => String::from("CrossProduct"),
             Self::DotProduct(..) => String::from("DotProduct"),
-            Self::Modulus(..) => String::from("Modulus"),
+            Self::Rem(..) => String::from("Rem"),
             Self::Div(..) => String::from("Div"),
             Self::Eq(..) => String::from("Eq"),
             Self::Ne(..) => String::from("Ne"),
@@ -155,7 +203,7 @@ impl Named for Expr {
             Self::Le(..) => String::from("Le"),
             Self::Identical(..) => String::from("Identical"),
             Self::Define(..) => String::from("Define"),
-            Self::Into(..) => String::from("Into"),
+            Self::Reassign(..) => String::from("Reassign"),
             Self::Group(..) => String::from("Group"),
             Self::Tuple(..) => String::from("Tuple"),
             Self::Union(..) => String::from("Union"),
@@ -187,6 +235,12 @@ impl Named for Expr {
             Self::View(..) => String::from("View"),
             Self::Map(..) => String::from("Map"),
             Self::Call(..) => String::from("Call"),
+            Self::Access(..) => String::from("Access"),
+            Self::If(..) => String::from("If"),
+            Self::Block(..) => String::from("Block"),
+            Self::Fn(..) => String::from("Fn"),
+            Self::Return(..) => String::from("Return"),
+            Self::Throw(..) => String::from("Throw"),
         }
     }
 }

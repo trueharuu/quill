@@ -3,21 +3,20 @@ use std::fmt::{Debug, Display};
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
     Eof,
-    Natural(usize),
     Real(f64),
-    Label(String),
+    Label(String),  // a
+    String(String), // "a"
 
     True,  // true
     False, // false
 
     // symbols, syntax
-    Plus,      // +
-    Minus,     // -
-    Asterisk,  // *
-    Slash,     // /
-    Percent,   // %
-    Semicolon, // ;
-    // Backslash, // \
+    Plus,        // +
+    Minus,       // -
+    Asterisk,    // *
+    Slash,       // /
+    Percent,     // %
+    Semicolon,   // ;
     Eq,          // =
     Ne,          // !=, ≠
     Gt,          // >
@@ -27,6 +26,13 @@ pub enum Token {
     Identical,   // ≡, ==
     Defined,     // :=
     DoubleColon, // ::
+
+    // symbols, keywords
+    If,     // if
+    Else,   // else
+    Fn,     // fn
+    Return, // return
+    Throw,  // throw
 
     // other
     Apostrophe, // '
@@ -84,10 +90,17 @@ impl Display for Token {
             "{}",
             match self {
                 Self::Eof => String::new(),
-                Self::Natural(u) => u.to_string(),
                 Self::Real(f) => f.to_string(),
+                Self::String(t) => format!("{t:?}"),
                 Self::True => "true".to_string(),
                 Self::False => "false".to_string(),
+
+                Self::If => "if".to_string(),
+                Self::Else => "else".to_string(),
+                Self::Fn => "fn".to_string(),
+                Self::Return => "return".to_string(),
+                Self::Throw => "throw".to_string(),
+
                 Self::Label(l) => (*l).to_string(),
                 Self::Semicolon => ";".to_string(),
 
@@ -97,13 +110,14 @@ impl Display for Token {
                 Self::Asterisk => "*".to_string(),
                 Self::Slash => "/".to_string(),
                 Self::Percent => "%".to_string(),
-                // Self::Backslash => "\\".to_string(),
+
                 Self::Eq => "=".to_string(),
                 Self::Ne => "≠".to_string(),
                 Self::Gt => ">".to_string(),
                 Self::Ge => "≥".to_string(),
                 Self::Lt => "<".to_string(),
                 Self::Le => "≤".to_string(),
+
                 Self::Identical => "≡".to_string(),
                 Self::Defined => ":=".to_string(),
                 Self::DoubleColon => "::".to_string(),

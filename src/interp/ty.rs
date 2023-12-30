@@ -8,7 +8,9 @@ pub enum Ty {
     Bool,
     Set(Box<Ty>),
     Tuple(Vec<Ty>),
-    Fn(String),
+    Fn(Box<str>),
+    String,
+    Object,
     None,
     Unresolved,
 }
@@ -34,7 +36,7 @@ impl Display for Ty {
                 Self::Integer => "Integer".to_string(),
                 Self::Natural => "Natural".to_string(),
                 Self::Real => "Real".to_string(),
-                Self::None => "<none>".to_string(),
+                Self::None => "None".to_string(),
                 Self::Tuple(t) => format!(
                     "Tuple({})",
                     t.iter()
@@ -45,6 +47,8 @@ impl Display for Ty {
                 Self::Set(t) => format!("Set({t})"),
                 Self::Unresolved => "<unresolved>".to_string(),
                 Self::Fn(t) => format!("Fn({t})"),
+                Self::Object => "Object".to_string(),
+                Self::String => "String".to_string(),
             }
         )
     }

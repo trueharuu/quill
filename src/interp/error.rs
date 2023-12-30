@@ -6,6 +6,7 @@ use crate::{
     common::{etc::Painted, named::Named},
     lex::token::Token,
     parse::expr::Expr,
+    rc,
     spans::span::{Span, Spanned},
 };
 
@@ -13,36 +14,49 @@ use super::{ty::Ty, value::Value};
 #[derive(Debug)]
 pub enum InterpreterError {
     // expr, span
-    NotImplemented(Spanned<Expr>, Span),
+    NotImplemented(Box<Spanned<Expr>>, Span),
     // verb, (expr, value), token, (expr, value), span
     CannotBinary(
         String,
-        (Spanned<Expr>, Value),
+        (Box<Spanned<Expr>>, Value),
         Token,
-        (Spanned<Expr>, Value),
+        (Box<Spanned<Expr>>, Value),
         Span,
     ),
     // verb, token, (expr, value), span
-    CannotUnary(String, Token, (Spanned<Expr>, Value), Span),
+    CannotUnary(String, Token, (Box<Spanned<Expr>>, Value), Span),
     // expr, element, span
-    SetElementIsNotOfType(Spanned<Expr>, Value, Ty, Span),
+    SetElementIsNotOfType(Box<Spanned<Expr>>, Value, Ty, Span),
     // expr, expr, span
-    DivisionByZero(Spanned<Expr>, Spanned<Expr>, Span),
+    DivisionByZero(Box<Spanned<Expr>>, Box<Spanned<Expr>>, Span),
     // label, span
     VariableDoesNotExist(String, Span),
     // label, last_use, span
-    VariableNoLongerExists(String, Spanned<Expr>, Span),
+    VariableNoLongerExists(String, Box<Spanned<Expr>>, Span),
     // token, expr, span
-    UselessDrop(Spanned<Token>, Spanned<Expr>, Span),
+    UselessDrop(Spanned<Token>, Box<Spanned<Expr>>, Span),
     // type, expr, span
-    MapOfWrongType(Ty, Spanned<Expr>, Span),
+    MapOfWrongType(Ty, Box<Spanned<Expr>>, Span),
     // type, expr, span
-    CallOnWrongType(Ty, Spanned<Expr>, Span),
+    CallOnWrongType(Ty, Box<Spanned<Expr>>, Span),
     // name, label, arity, given_arity, expr, call_site, span
-    MissingArgument(String, String, usize, usize, Spanned<Expr>, Span, Span),
+    MissingArgument(
+        Box<str>,
+        Box<str>,
+        Box<[Box<str>]>,
+        usize,
+        Box<Spanned<Expr>>,
+        Span,
+        Span,
+    ),
     // expected_ty, found_ty, span
     ExpectedFound(Ty, Ty, Span),
+    // expr, value, key, span
+    KeyDoesNotExist(Box<Spanned<Expr>>, Value, Spanned<String>, Span),
     Custom(String, Span),
+    // span
+    ReturnOutsideOfFunction(Span),
+    SafeReturn(rc!(ty Value), Span),
 }
 
 impl InterpreterError {
@@ -61,7 +75,10 @@ impl InterpreterError {
             | Self::CallOnWrongType(.., span)
             | Self::Custom(.., span)
             | Self::MissingArgument(.., span)
-            | Self::ExpectedFound(.., span) => span,
+            | Self::ExpectedFound(.., span)
+            | Self::KeyDoesNotExist(.., span)
+            | Self::ReturnOutsideOfFunction(span)
+            | Self::SafeReturn(.., span) => span,
         }
     }
 
@@ -238,7 +255,7 @@ impl InterpreterError {
             }
 
             Self::Custom(err, span) => {
-                report.set_message("custom error");
+                report.set_message("runtime error");
                 report.add_label(
                     Label::new((id, span.into_range()))
                         .with_message(err)
@@ -246,17 +263,33 @@ impl InterpreterError {
                 );
             }
 
-            Self::MissingArgument(name, label, arity, given_arity, expr, call_site, _) => {
+            Self::MissingArgument(name, _, arity, given_arity, expr, call_site, _) => {
                 report.set_message(format!(
-                    "missing argument for fn {}",
-                    format!("[{name}]").painted().fg(Color::Blue)
+                    "missing arguments for fn {}",
+                    name.painted().fg(Color::Blue)
                 ));
                 report.add_label(
                     Label::new((id.clone(), call_site.into_range()))
                         .with_color(Color::Red)
                         .with_message(format!(
-                            "the argument {} was not given a value",
-                            format!("[{label}]").painted().fg(Color::Red)
+                            "the argument{} {} {} not given a value",
+                            if arity.len() - 1 > *given_arity {
+                                "s"
+                            } else {
+                                ""
+                            },
+                            arity
+                                .iter()
+                                .enumerate()
+                                .filter(|(i, _)| i >= given_arity)
+                                .map(|(_, v)| v.painted().fg(Color::Red).to_string())
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                            if arity.len() - 1 > *given_arity {
+                                "were"
+                            } else {
+                                "was"
+                            },
                         ))
                         .with_order(0),
                 );
@@ -264,9 +297,19 @@ impl InterpreterError {
                     Label::new((id, expr.span().into_range()))
                         .with_color(Color::Blue)
                         .with_message(format!(
-                            "{} has arity {} but was given {} arguments",
-                            format!("[{name}]").painted().fg(Color::Blue),
-                            arity.painted().fg(Color::Green),
+                            "{}({}) has arity {} but was given {} arguments",
+                            format!("{name}").painted().fg(Color::Blue),
+                            arity
+                                .iter()
+                                .enumerate()
+                                .map(|(i, v)| if i >= *given_arity {
+                                    v.painted().fg(Color::Red).to_string()
+                                } else {
+                                    v.to_string()
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                            arity.len().painted().fg(Color::Green),
                             given_arity.painted().fg(Color::Yellow),
                         ))
                         .with_order(1),
@@ -277,7 +320,7 @@ impl InterpreterError {
                 report.set_message("expected a different type");
                 report.add_label(
                     Label::new((id, span.into_range()))
-                        .with_color(Color::Yellow)
+                        .with_color(Color::Red)
                         .with_message(format!(
                             "expected a value of type {} but recieved {}",
                             expected.painted().fg(Color::Blue),
@@ -285,6 +328,33 @@ impl InterpreterError {
                         )),
                 );
             }
+            Self::KeyDoesNotExist(_, value, key, _) => {
+                report.set_message("key does not exist on this object");
+                report.add_label(
+                    Label::new((id, key.span().into_range()))
+                        .with_color(Color::Red)
+                        .with_message(format!(
+                            "key {} does not exist on type {}",
+                            format!("[{key}]").painted().fg(Color::Red),
+                            value.ty().painted().fg(Color::Blue)
+                        )),
+                );
+            }
+
+            Self::ReturnOutsideOfFunction(span) => {
+                report.set_message("return outside of function");
+                report.add_label(
+                    Label::new((id, span.into_range()))
+                        .with_color(Color::Red)
+                        .with_message(format!(
+                            "{} used outside of function",
+                            "return".painted().fg(Color::Blue)
+                        )),
+                );
+            }
+            Self::SafeReturn(..) => {
+                // do nothing.
+            },
             #[allow(unreachable_patterns, clippy::match_wildcard_for_single_variants)]
             _ => todo!(),
         }
